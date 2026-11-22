@@ -102,11 +102,24 @@ function chk(my){return v=>{if(my!==RUN)throw ABORT;return v}}
 function guard(p){const my=RUN;return p.then(chk(my))}
 function wait(ms){return guard(new Promise(res=>TIMERS.push({t:clock+ms,res})))}
 const FRAMEHOOKS=[];
-function frame(t){const dt=Math.min(64,t-lastT);lastT=t;if(!PAUSED){clock+=dt*SPEED;tick();for(const f of FRAMEHOOKS)f()}flush();requestAnimationFrame(frame)}
+/* on-screen error log for phones: open the page with ?debug to see it */
+const DEBUG=/[?&]debug\b/.test(location.search);
+function report(e){try{console.error(e);if(!DEBUG)return;let b=document.getElementById("dbg");if(!b){b=document.createElement("pre");b.id="dbg";b.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:999;max-height:40vh;overflow:auto;margin:0;padding:8px;background:#B00020;color:#fff;font:12px/1.4 monospace;direction:ltr;text-align:left;white-space:pre-wrap";document.body.appendChild(b)}
+  b.textContent+=(e&&(e.stack||e.message)||String(e))+"\n"}catch(_){}}
+window.addEventListener("error",ev=>report(ev.error||ev.message));
+window.addEventListener("unhandledrejection",ev=>{if(ev.reason!==ABORT)report(ev.reason)});
+/* the clock must never stop: one failing frame should not freeze the whole story */
+let lastRaf=performance.now();
+function step(t){const dt=Math.max(0,Math.min(64,t-lastT));lastT=t;
+  if(!PAUSED){clock+=dt*SPEED;try{tick()}catch(e){report(e)}for(const f of FRAMEHOOKS){try{f()}catch(e){report(e)}}}
+  try{flush()}catch(e){report(e)}}
+function frame(t){lastRaf=performance.now();step(lastRaf);requestAnimationFrame(frame)}
+/* fallback if the browser throttles requestAnimationFrame (in-app browsers, low-power mode) */
+setInterval(()=>{const n=performance.now();if(!document.hidden&&n-lastRaf>250)step(n)},100);
 function tick(){
   for(let i=TW.length-1;i>=0;i--){const w=TW[i];const p=clamp((clock-w.t0)/w.dur,0,1),k=w.ease(p);
     for(const key in w.to){const a=w.from[key],b=w.to[key];w.e[key]=Array.isArray(b)?b.map((v,j)=>lerp(a[j],v,k)):lerp(a,b,k)}
-    if(w.upd)w.upd(w.e,p,k);DIRTY.add(w.id);if(p>=1){TW.splice(i,1);w.res()}}
+    try{if(w.upd)w.upd(w.e,p,k)}catch(e){report(e)}DIRTY.add(w.id);if(p>=1){TW.splice(i,1);w.res()}}
   for(let i=TIMERS.length-1;i>=0;i--){if(clock>=TIMERS[i].t){const tm=TIMERS.splice(i,1)[0];tm.res()}}
 }
 /* tween entity props; arm targets may start from a named pose */
@@ -373,7 +386,7 @@ function flush(){
   if(!DIRTY.size)return;const ids=new Set(DIRTY);DIRTY.clear();
   for(const id of R.order){const e=R.ents[id];if(!e)continue;if(e.att&&ids.has(e.att.to))ids.add(id);if(e.dep&&e.dep.some(d=>ids.has(d)))ids.add(id)}
   for(const id of R.order){const e=R.ents[id];if(e&&e.att){const [hx,hy]=handWorld(R.ents[e.att.to],e.att.side);e.x=hx+(e.att.dx||0);e.y=hy+(e.att.dy||0)}}
-  ids.forEach(id=>{const g=midSvg.querySelector("#e_"+id);if(g)g.innerHTML=renderEnt(id)});
+  ids.forEach(id=>{try{const g=midSvg.querySelector("#e_"+id);if(g)g.innerHTML=renderEnt(id)}catch(e){report(e)}});
 }
 function attach(id,to,side,dx=0,dy=0){set(id,{att:{to,side,dx,dy}});DIRTY.add(to)}
 function detach(id){const e=R.ents[id];if(e)e.att=null}

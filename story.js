@@ -223,7 +223,7 @@ async function startStory(){
   abortAll();try{SFX.magic();UIL.querySelectorAll(".startbtn").forEach(n=>n.remove());
     await pageSlide(()=>{setupCreator();cam(700,450,1.3,0)});CUR={mode:"creator",n:0};creatorPanel();setPg(1);
     vline("c01");
-  }catch(e){if(e!==ABORT)console.error(e)}finally{startStory.busy=false}
+  }catch(e){if(e!==ABORT)report(e)}finally{startStory.busy=false}
 }
 
 /* ---------------- character builder ---------------- */
@@ -277,7 +277,7 @@ async function creatorDone(){
     await Promise.all([line("c04"),walk("char",1780,2400),cam(1250,470,1.25,2400)]);
     await cut(setup1,500);
     await sceneBody(1);
-  }catch(e){if(e!==ABORT)console.error(e)}
+  }catch(e){if(e!==ABORT)report(e)}
 }
 
 /* ---------------- scenes ---------------- */
@@ -625,10 +625,10 @@ async function sceneBody(n){
 async function runFrom(n,withLink){
   abortAll();closeOv();UIL.querySelectorAll(".albumov,.bigphoto,.subt,.startbtn,.pgclone").forEach(x=>x.remove());
   CUR={mode:"scene",n};storyPanel();
-  try{if(withLink)await SC[n-1].link();else SC[n].setup();drawMid();await sceneBody(n)}catch(e){if(e!==ABORT)console.error(e)}
+  try{if(withLink)await SC[n-1].link();else SC[n].setup();drawMid();await sceneBody(n)}catch(e){if(e!==ABORT)report(e)}
 }
 async function replay(){
-  if(CUR.mode==="ask"&&R.snap){abortAll();restore(R.snap);try{await SC[CUR.n].react(true);await SC[CUR.n].shot()}catch(e){if(e!==ABORT)console.error(e)}}
+  if(CUR.mode==="ask"&&R.snap){abortAll();restore(R.snap);try{await SC[CUR.n].react(true);await SC[CUR.n].shot()}catch(e){if(e!==ABORT)report(e)}}
   else if(CUR.mode==="scene"&&CUR.n>=1)runFrom(CUR.n,false);
   else if(CUR.mode==="creator")cam(700,450,1.3,600).catch(()=>{});
 }
@@ -641,7 +641,7 @@ async function runEnding(){
     await capture(6);
     const e2=line("e02");await albumOverlay("end");await e2;
     endPanel(true);
-  }catch(e){if(e!==ABORT)console.error(e)}
+  }catch(e){if(e!==ABORT)report(e)}
 }
 
 /* ---------------- album overlays, photo pick, viewer ---------------- */
