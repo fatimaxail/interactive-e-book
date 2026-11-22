@@ -59,15 +59,38 @@ function pickVoice(){try{const vs=speechSynthesis.getVoices();arVoice=vs.find(v=
 try{pickVoice();speechSynthesis.onvoiceschanged=pickVoice}catch(e){}
 let curAudio=null;
 function stopVoice(){try{speechSynthesis.cancel()}catch(e){}if(curAudio){try{curAudio.pause()}catch(e){}curAudio=null}}
+let curUtt=null; /* keep a reference: iOS drops onend if the utterance is garbage-collected */
 function voice(text,id,pitch=1.05){
   return new Promise(res=>{
     if(S.mute||FAST){res();return}
-    const tts=()=>{if(!arVoice){res();return}try{const u=new SpeechSynthesisUtterance(text.replace(/[«»]/g,""));u.voice=arVoice;u.lang=arVoice.lang;u.rate=.9;u.pitch=pitch;u.onend=res;u.onerror=res;speechSynthesis.speak(u)}catch(e){res()}};
-    if(id&&CLIPS.has(id)){fetch("audio/"+id+".mp3").then(r=>{if(!r.ok)throw 0;return r.blob()}).then(b=>{const a=new Audio(URL.createObjectURL(b));curAudio=a;a.onended=res;a.play().catch(tts)}).catch(tts)}
+    let done=false,guard=0;const fin=()=>{if(done)return;done=true;clearTimeout(guard);res()};
+    /* safety net: never let the story hang if the device voice never reports "end" (iOS / in-app browsers) */
+    const arm=ms=>{guard=setTimeout(()=>{if(PAUSED){arm(1000);return}try{if(curUtt)speechSynthesis.cancel()}catch(e){}fin()},ms)};
+    arm(2500+text.length*140);
+    const tts=()=>{
+      if(!window.speechSynthesis||!window.SpeechSynthesisUtterance){fin();return}
+      if(!arVoice)pickVoice();
+      try{
+        const u=new SpeechSynthesisUtterance(text.replace(/[«»]/g,""));
+        if(arVoice){u.voice=arVoice;u.lang=arVoice.lang}else u.lang="ar-SA"; /* iOS can speak with lang only */
+        u.rate=.9;u.pitch=pitch;u.onend=fin;u.onerror=fin;curUtt=u;
+        if(speechSynthesis.paused)speechSynthesis.resume();
+        speechSynthesis.speak(u);
+      }catch(e){fin()}
+    };
+    if(id&&CLIPS.has(id)){fetch("audio/"+id+".mp3").then(r=>{if(!r.ok)throw 0;return r.blob()}).then(b=>{const a=new Audio(URL.createObjectURL(b));curAudio=a;a.onended=fin;a.onerror=tts;a.play().catch(tts)}).catch(tts)}
     else tts();
   });
 }
-document.addEventListener("pointerdown",()=>ac(),{capture:true});
+/* iOS/Safari only allow audio + speech after a user gesture: unlock both on the first tap */
+let unlocked=false;
+function unlockAudio(){
+  const c=ac();
+  if(unlocked)return;unlocked=true;
+  try{if(c){const b=c.createBuffer(1,1,22050),src=c.createBufferSource();src.buffer=b;src.connect(c.destination);src.start(0)}}catch(e){}
+  try{pickVoice();const u=new SpeechSynthesisUtterance(" ");u.volume=0;u.lang="ar-SA";speechSynthesis.speak(u)}catch(e){}
+}
+["pointerdown","touchend","click"].forEach(ev=>document.addEventListener(ev,unlockAudio,{capture:true}));
 
 /* ---------------- clock, tweens, run token ---------------- */
 let PAUSED=false, RUN=0, clock=0, lastT=performance.now();
